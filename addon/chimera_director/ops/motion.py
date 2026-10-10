@@ -1,7 +1,7 @@
 import bpy
 from bpy.props import IntProperty
 
-from .. import constraints, prefs, scene_io
+from .. import constraints, prefs, scene_io, snapshot
 from ..client import OrchestratorError
 from . import rig_map
 from .common import ShotOperator, active_shot, get_client, project, push_shot, report_error, track_job
@@ -28,6 +28,9 @@ class CHIMERA_OT_generate_motion(ShotOperator, bpy.types.Operator):
         for w in warnings:
             self.report({"WARNING"}, w)
         payload["scene"] = context.scene.name
+        # The job uses the targets as they are now: record their hash, or a
+        # debounced refresh landing after a fast job would mark it stale.
+        shot.constraints_hash = snapshot.constraints_hash(shot)
         for c in shot.characters:  # rest pose + bone map for the retarget worker
             rig = c.rig_object
             if rig is not None and rig.type == "ARMATURE" and c.char_id in payload["characters"]:
