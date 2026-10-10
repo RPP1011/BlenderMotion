@@ -33,10 +33,9 @@ def motion(spec_path, out_blend):
         cdata = spec["characters"].get(cid, {})
         start = Matrix(cdata["start_matrix_world"]) if cdata.get("start_matrix_world") else Matrix()
         scale = cdata.get("scale") or 1.0
-        dense = next((c for c in cdata.get("constraints", []) if c["type"] == "root2d"
-                      and c["mode"] == "dense"), None)
-        sparse = next((c for c in cdata.get("constraints", []) if c["type"] == "root2d"
-                       and c["mode"] == "sparse"), None)
+        root2d = [c for c in cdata.get("constraints", []) if c["type"] == "root2d"]
+        dense = next((c for c in root2d if len(c["frame_indices"]) >= frames), None)
+        sparse = next((c for c in root2d if c is not dense), None)
         for v in range(int(spec.get("variants", 2))):
             sway = rng.uniform(0.02, 0.15)
             obj = bpy.data.objects.new(f"tmp_{cid}_{v}", None)
@@ -44,12 +43,13 @@ def motion(spec_path, out_blend):
             for f in range(frames):
                 t = f / max(1, frames - 1)
                 if dense:
-                    i = min(f, len(dense["xz"]) - 1)
-                    x, z = dense["xz"][i]
-                    head = dense["heading"][i] or 0.0
-                elif sparse and sparse["frames"]:
+                    i = min(f, len(dense["smooth_root_2d"]) - 1)
+                    x, z = dense["smooth_root_2d"][i]
+                    cos_h, sin_h = dense["global_root_heading"][i]
+                    head = math.atan2(sin_h, cos_h)
+                elif sparse and sparse["frame_indices"]:
                     # piecewise linear from origin through the waypoints
-                    keys = [(0, [0.0, 0.0])] + sorted(zip(sparse["frames"], sparse["xz"]))
+                    keys = [(0, [0.0, 0.0])] + sorted(zip(sparse["frame_indices"], sparse["smooth_root_2d"]))
                     k = max(j for j, (kf, _) in enumerate(keys) if kf <= f)
                     (f0, a), (f1, b) = keys[k], keys[min(k + 1, len(keys) - 1)]
                     u = 0.0 if f1 == f0 else (f - f0) / (f1 - f0)

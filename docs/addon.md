@@ -108,8 +108,9 @@ data the orchestrator cannot see:
       "start_matrix_world": [[...4x4...]],  // null if no START placed
       "scale": 0.5,                         // soma_hip / rig_hip; worker divides on the way back
       "constraints": [
-        {"type": "root2d", "mode": "dense",  "frames": [0..n-1], "xz": [[x,z]...], "heading": [rad...]},
-        {"type": "root2d", "mode": "sparse", "frames": [24], "xz": [[x,z]], "heading": [null]},
+        // root2d uses Kimodo's own field names; heading is [cos, sin] of the yaw
+        {"type": "root2d", "frame_indices": [0..n-1], "smooth_root_2d": [[x,z]...], "global_root_heading": [[c,s]...]},
+        {"type": "root2d", "frame_indices": [24], "smooth_root_2d": [[x,z]]},  // waypoints without heading
         {"type": "end_effector", "joint": "right_hand", "frame": 40, "position": [x,y,z]}
       ]
     }
@@ -118,23 +119,26 @@ data the orchestrator cannot see:
 ```
 
 Canonical frame: `(-x, z, y) · scale` of the START-local position, so Y is up,
-the character faces +Z, and heading 0 means facing +Z. **This convention has not
-been checked against Kimodo.** It lives in one function,
-`constraints.to_canonical`.
+the character faces +Z, and heading 0 means facing +Z. **Checked against
+Kimodo SOMA-RP v1.1 on 2026-10-10**: Y-up, metres, heading 0 faces +Z, left is
++X. Kimodo outputs **30 fps**, so the motion server must resample to 24.
+`end_effector` stays in this orchestrator format: Kimodo wants a full pose
+there, so the motion server IK-solves one.
 
 **Passes.** With VACE gone, the worker only needs `kp2d.json` (eval),
 `first.png` / `last.png` (H3 FLF) and `playblast.mp4` (H3 Ref2V). No pose,
 depth or line-art passes.
 
 **Passes body:** `{snapshot_path, scene_hash, scene, frame_in, frame_out
-(exclusive), frames, frames_wan, camera, characters: {char_id: rig object
+(exclusive), frames, frames_gen, camera, characters: {char_id: rig object
 name}, bonemaps: {char_id: {canonical joint: bone}}, resolution: [w, h]}`.
 The worker must hide characters that are not in the shot. `bonemaps` is the
 rig's saved bone map, or the name guess if none was saved.
 
 **Passes worker** (`blender_worker/passes.py`, run as `blender -b <snapshot>
 --python blender_worker/passes.py -- <spec.json>`; the spec is the body plus
-`out_dir`). Every output is `frames_wan` frames long: past the out-point the
+`out_dir`). Every output is `frames_gen` frames long (H3's 17k+5 grid at 24 fps;
+H3 is trained on 124-362 frames, so shots under ~5.2 s are outside its range): past the out-point the
 last pose is held, never trimmed.
 
 * `kp2d.json`: `{format: "coco18", joints, resolution, fps, frame_in,

@@ -66,8 +66,8 @@ def test_registration():
 
 def test_pure():
     print("pure helpers")
-    check([scene_io.wan_frame_count(n) for n in (1, 2, 4, 5, 96, 97, 144)] == [1, 5, 5, 5, 97, 97, 145],
-          "wan_frame_count snaps up to 4n+1")
+    check([scene_io.h3_frame_count(n) for n in (1, 5, 6, 22, 23, 96, 124, 125)] == [5, 5, 22, 22, 39, 107, 124, 141],
+          "h3_frame_count snaps up to 17k+5")
     mixamo = ["mixamorig:Hips", "mixamorig:Spine", "mixamorig:Spine1", "mixamorig:Spine2", "mixamorig:Neck",
               "mixamorig:Head", "mixamorig:LeftShoulder", "mixamorig:LeftArm", "mixamorig:LeftForeArm",
               "mixamorig:LeftHand", "mixamorig:RightShoulder", "mixamorig:RightArm", "mixamorig:RightForeArm",
@@ -161,16 +161,17 @@ def test_constraints():
     payload, warnings = constraints.export(scene, p, shot, 0.95)
     c = payload["characters"]["hero"]
     check(abs(c["scale"] - 0.95 / 1.9) < 1e-4, f"scale = soma/rig ({c['scale']:.3f})")
-    wp = next(x for x in c["constraints"] if x["type"] == "root2d" and x["mode"] == "sparse")
-    check(wp["frames"] == [24], "waypoint frame is shot-local")
-    x, z = wp["xz"][0]
+    wp = next(x for x in c["constraints"] if x["type"] == "root2d" and len(x["frame_indices"]) == 1)
+    check(wp["frame_indices"] == [24], "waypoint frame is shot-local")
+    x, z = wp["smooth_root_2d"][0]
     check(abs(x) < 1e-4 and abs(z - 2.0 * 0.5) < 1e-4, f"waypoint 2m ahead -> canonical +Z 1.0 (got {x:.3f},{z:.3f})")
-    dense = next(x for x in c["constraints"] if x["type"] == "root2d" and x["mode"] == "dense")
+    dense = next(x for x in c["constraints"] if x["type"] == "root2d" and len(x["frame_indices"]) > 1)
     n = scene_io.frames_for(shot, p.fps)
-    check(len(dense["xz"]) == n, f"path sampled per frame ({len(dense['xz'])}/{n})")
-    check(abs(dense["xz"][0][1]) < 1e-3 and abs(dense["xz"][-1][1] - 4.0 * 0.5) < 1e-2,
+    check(len(dense["smooth_root_2d"]) == n, f"path sampled per frame ({len(dense['smooth_root_2d'])}/{n})")
+    check(abs(dense["smooth_root_2d"][0][1]) < 1e-3 and abs(dense["smooth_root_2d"][-1][1] - 4.0 * 0.5) < 1e-2,
           "path runs along canonical +Z from origin")
-    check(all(abs(h) < 1e-3 for h in dense["heading"]), "path heading 0 along facing")
+    check(all(abs(h[0] - 1) < 1e-3 and abs(h[1]) < 1e-3 for h in dense["global_root_heading"]),
+          "path heading [cos, sin] = [1, 0] along facing")
     eff = next(x for x in c["constraints"] if x["type"] == "end_effector")
     check(eff["joint"] == "right_hand" and abs(eff["position"][2] - 1.0) < 1e-4, "effector position")
     check(not warnings, f"no warnings ({warnings})")
@@ -310,7 +311,7 @@ def test_e2e(url):
             kp = json.load(f)
         rng = scene_io.shot_range(scene, shot.name)
         n = rng[1] - rng[0]
-        check(len(kp["frames"]) == scene_io.wan_frame_count(n), "kp2d covers the 4n+1 frame count")
+        check(len(kp["frames"]) == scene_io.h3_frame_count(n), "kp2d covers the 17k+5 frame count")
         pts = [pt for fr in kp["frames"] for pt in fr["people"]["hero"]]
         check(len(kp["frames"][0]["people"]["hero"]) == 18, "kp2d has COCO-18 joints")
         check(any(pt and pt[2] for pt in pts), "kp2d has visible joints")

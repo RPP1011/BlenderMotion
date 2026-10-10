@@ -13,8 +13,14 @@ The motion model's canonical frame is assumed Y-up with the character facing
 
     canonical = (-x_local, z_local, y_local) * scale
 
-UNVERIFIED against Kimodo's actual convention; it is isolated in
-`to_canonical` so one function changes if it is wrong.
+Checked against Kimodo (SOMA-RP v1.1, 2026-10-10): output is Y-up, metres,
+heading 0 faces +Z, and the skeleton's left side is +X. A heading is sent as
+Kimodo's `[cos, sin]` pair of the yaw from `heading_in_start` (positive toward
++X; the sign comes from one walk clip's drift, so treat it as likely, not proven).
+
+root2d entries use Kimodo's constraint JSON field names (`frame_indices`,
+`smooth_root_2d`, `global_root_heading`). `end_effector` is NOT Kimodo's
+format: Kimodo needs a full pose there, so the motion server IK-solves one.
 
 Scale. Constraints are solved on the model's skeleton, so distances authored
 on your rig are scaled by soma_hip_height / rig_hip_height. (The architecture
@@ -73,6 +79,11 @@ def heading_in_start(start_inv, world_dir):
     """Yaw (radians) of a world direction in the canonical frame; 0 = facing +Z."""
     d = start_inv.to_3x3() @ Vector(world_dir)
     return math.atan2(-d.x, d.y)
+
+
+def heading_pair(yaw):
+    """Kimodo's heading encoding: [cos, sin] of the yaw, rounded for stable hashes."""
+    return [round(math.cos(yaw), 6), round(math.sin(yaw), 6)]
 
 
 def sample_curve(obj, n):
@@ -144,22 +155,30 @@ def export(scene, project, shot, soma_hip_height):
                 d = b - a
                 heads.append(heading_in_start(inv, d) if d.length > 1e-6 else (heads[-1] if heads else 0.0))
             cons.append({
-                "type": "root2d", "mode": "dense",
-                "frames": list(range(len(pts))),
-                "xz": [[c[0], c[2]] for c in canon],
-                "heading": heads,
+                "type": "root2d",
+                "frame_indices": list(range(len(pts))),
+                "smooth_root_2d": [[c[0], c[2]] for c in canon],
+                "global_root_heading": [heading_pair(h) for h in heads],
             })
             break  # one path per character
 
         wps = sorted(helpers(shot.name, cid, "waypoint"), key=lambda o: o.get("chimera_frame", 0))
-        if wps:
-            entry = {"type": "root2d", "mode": "sparse", "frames": [], "xz": [], "heading": []}
-            for wp in wps:
+        # Kimodo's heading is all-or-nothing per entry, so waypoints with and
+        # without a heading go into separate root2d entries.
+        for with_heading in (False, True):
+            group = [wp for wp in wps if bool(wp.get("chimera_use_heading")) == with_heading]
+            if not group:
+                continue
+            entry = {"type": "root2d", "frame_indices": [], "smooth_root_2d": []}
+            if with_heading:
+                entry["global_root_heading"] = []
+            for wp in group:
                 c = to_canonical(inv, wp.matrix_world.translation, scale)
-                entry["frames"].append(int(wp.get("chimera_frame", 0)))
-                entry["xz"].append([c[0], c[2]])
-                fwd = wp.matrix_world.to_3x3() @ Vector((0, 1, 0))
-                entry["heading"].append(heading_in_start(inv, fwd) if wp.get("chimera_use_heading") else None)
+                entry["frame_indices"].append(int(wp.get("chimera_frame", 0)))
+                entry["smooth_root_2d"].append([c[0], c[2]])
+                if with_heading:
+                    fwd = wp.matrix_world.to_3x3() @ Vector((0, 1, 0))
+                    entry["global_root_heading"].append(heading_pair(heading_in_start(inv, fwd)))
             cons.append(entry)
 
         for eff in helpers(shot.name, cid, "effector"):
@@ -171,7 +190,7 @@ def export(scene, project, shot, soma_hip_height):
             })
 
         for c in cons:
-            for f in c.get("frames", [c.get("frame", 0)]):
+            for f in c.get("frame_indices", [c.get("frame", 0)]):
                 if not 0 <= f < n_frames:
                     warnings.append(f"{cid}: {c['type']} frame {f} outside shot (0..{n_frames - 1})")
 

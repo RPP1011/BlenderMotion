@@ -8,7 +8,7 @@ out_dir:
   kp2d.json      2D keypoints per frame, COCO-18 order, pixel coords + visibility
   first.png      beauty still of the in-frame   (H3 first/last-frame input)
   last.png       beauty still of the last frame
-  playblast.mp4  frames_wan frames; the last pose is held past the out-point
+  playblast.mp4  frames_gen frames (H3's 17k+5 grid); the last pose is held past the out-point
 
 Runs on a snapshot copy, never the user's file. Prints PASSES_OK on success.
 
@@ -229,7 +229,7 @@ def run(spec):
 
     f_in, f_out = int(spec["frame_in"]), int(spec["frame_out"])
     last = f_out - 1
-    total = int(spec.get("frames_wan") or (f_out - f_in))
+    total = int(spec.get("frames_gen") or spec.get("frames_wan") or (f_out - f_in))
     # Frame i of the output shows scene frame min(f_in + i, last): hold, never trim.
     src_frames = [min(f_in + i, last) for i in range(total)]
 

@@ -43,9 +43,9 @@ def frames_for(shot, fps):
     return max(1, round(shot.duration_s * fps))
 
 
-def wan_frame_count(n):
-    """Smallest 4k+1 >= n (Wan's frame-count constraint; extend, never trim)."""
-    return n if n % 4 == 1 else n + (4 - (n - 1) % 4) % 4
+def h3_frame_count(n):
+    """Smallest 17k+5 >= n: H3's frame grid at 24 fps (extend, never trim)."""
+    return 5 if n <= 5 else n + (17 - (n - 5) % 17) % 17
 
 
 # -- collections & markers -----------------------------------------------------

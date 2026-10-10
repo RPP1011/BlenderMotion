@@ -38,7 +38,7 @@ class CHIMERA_OT_render_passes(ShotOperator, bpy.types.Operator):
             "frame_in": rng[0],
             "frame_out": rng[1],
             "frames": n,
-            "frames_wan": scene_io.wan_frame_count(n),
+            "frames_gen": scene_io.h3_frame_count(n),
             "camera": scene_io.cam_name(shot.name),
             "characters": {c.char_id: c.rig_object.name for c in shot.characters if c.rig_object},
             "bonemaps": {c.char_id: rig_map.load_or_guess(p, c.rig_object)
