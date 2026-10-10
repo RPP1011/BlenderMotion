@@ -297,6 +297,11 @@ def test_e2e(url):
     status = wait("motion")
     check(status == "done", f"motion job done ({status}: {shot.stage('motion').message})")
     check(len(scene_io.variant_actions(shot.name, "hero")) == 2, "two variants imported from worker")
+    if os.environ.get("CHIMERA_E2E_SERVER"):  # server/orchestrator.py: retargeted onto the rig's bones
+        act = scene_io.variant_actions(shot.name, "hero").get(0)
+        paths = {fc.data_path for fc in compat.iter_fcurves(act)}
+        check('pose.bones["Hips"].location' in paths and 'pose.bones["LeftUpLeg"].rotation_quaternion' in paths,
+              f"variant retargeted onto HeroRig bones ({len(paths)} channels)")
     check(scene.chimera.server_status == "ok", "health reported ok")
 
     check(bpy.ops.chimera.render_passes() == {"FINISHED"}, "passes job submitted")
