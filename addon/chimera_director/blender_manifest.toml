@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "chimera_director"
+version = "0.1.0"
+name = "Chimera Director"
+tagline = "Text-to-motion and video generation pipeline front end"
+maintainer = "RPGrafx"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Animation", "Pipeline", "Sequencer"]
+
+[permissions]
+network = "Talks to the local Chimera orchestrator"
+files = "Reads and writes shot JSON, snapshots and bone maps"
