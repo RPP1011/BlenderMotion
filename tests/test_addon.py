@@ -283,7 +283,7 @@ def test_e2e(url):
     bpy.ops.chimera.push()
     events.WATCHER.start()
 
-    def wait(stage, timeout=180):
+    def wait(stage, timeout=float(os.environ.get("CHIMERA_E2E_TIMEOUT", "180"))):
         t0 = time.time()
         while time.time() - t0 < timeout:
             sync.tick()
