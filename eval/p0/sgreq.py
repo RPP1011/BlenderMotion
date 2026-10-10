@@ -1,6 +1,9 @@
 """Submit one H3 Ref2V job to the SGLang server, poll, save the mp4.
 python sgreq.py <ref.mp4> <out.mp4> [steps] [short_edge]"""
-import json, sys, time, urllib.request
+import json
+import sys
+import time
+import urllib.request
 ref, out = sys.argv[1], sys.argv[2]
 steps = int(sys.argv[3]) if len(sys.argv) > 3 else 20
 edge = int(sys.argv[4]) if len(sys.argv) > 4 else 544
@@ -18,7 +21,8 @@ req = urllib.request.Request(B, json.dumps(body).encode(), {"Content-Type": "app
 try:
     r = json.load(urllib.request.urlopen(req))
 except urllib.error.HTTPError as e:
-    print("SG_ERROR", e.code, e.read().decode()[:2000]); sys.exit(1)
+    print("SG_ERROR", e.code, e.read().decode()[:2000])
+    sys.exit(1)
 vid = r["id"]
 while True:
     s = json.load(urllib.request.urlopen(f"{B}/{vid}"))
@@ -26,6 +30,7 @@ while True:
         break
     time.sleep(2)
 if s["status"] == "failed":
-    print("SG_ERROR", json.dumps(s)[:2000]); sys.exit(1)
+    print("SG_ERROR", json.dumps(s)[:2000])
+    sys.exit(1)
 open(out, "wb").write(urllib.request.urlopen(f"{B}/{vid}/content").read())
 print("SG_OK", out, round(time.time() - t0), "s")
