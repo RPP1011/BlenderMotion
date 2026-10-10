@@ -7,8 +7,9 @@ end to end before the real orchestrator, motion server and ComfyUI exist.
     python tools/mock_orchestrator.py --blender /path/to/blender [--port 8765]
 
 With --blender, motion and passes jobs run real headless Blender workers
-(tools/mock_worker.py): motion = procedural root motion that follows the
-authored targets; passes = a 1-sample Cycles playblast. "generate" (H3 only) copies
+: motion = procedural root motion that follows the authored targets
+(tools/mock_worker.py); passes = the real passes worker
+(blender_worker/passes.py), at reduced resolution and with CPU-safe engines. "generate" (H3 only) copies
 the playblast as the output video and reports a random PCK. Without --blender,
 motion/passes jobs fail with a clear message; plan/shots/health still work.
 """
@@ -28,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKER = os.path.join(HERE, "mock_worker.py")
+PASSES_WORKER = os.path.join(HERE, "..", "blender_worker", "passes.py")
 
 STATE = {"projects": {}, "jobs": {}}
 LOCK = threading.Lock()
@@ -87,13 +89,13 @@ def step(job, stage, progress, delay=0.2):
     time.sleep(delay * ARGS.speed)
 
 
-def run_blender(job, args):
+def run_blender(job, args, ok="MOCK_WORKER_OK"):
     if not ARGS.blender:
         raise RuntimeError("mock orchestrator started without --blender; cannot run workers")
     cmd = [ARGS.blender, "-b", "--factory-startup", *args]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     job["logs"] = (proc.stdout + proc.stderr).splitlines()[-40:]
-    if proc.returncode != 0 or "MOCK_WORKER_OK" not in proc.stdout:
+    if proc.returncode != 0 or ok not in proc.stdout:
         raise RuntimeError("worker failed: " + " | ".join(job["logs"][-5:]))
 
 
@@ -128,8 +130,10 @@ def do_passes(job, proj, shot_id, body):
     os.makedirs(out_dir, exist_ok=True)
     step(job, "passes", 0.2)
     spec_path = os.path.join(out_dir, "spec.json")
-    write_json(spec_path, {**body, "out_dir": out_dir})
-    run_blender(job, [body["snapshot_path"], "--python", WORKER, "--", "passes", spec_path])
+    write_json(spec_path, {**body, "out_dir": out_dir, "still_engine": ARGS.still_engine,
+                           "playblast_engine": ARGS.playblast_engine,
+                           "resolution_scale": ARGS.resolution_scale})
+    run_blender(job, [body["snapshot_path"], "--python", PASSES_WORKER, "--", spec_path], ok="PASSES_OK")
     job["artifact"] = {"dir": out_dir, "playblast": os.path.join(out_dir, "playblast.mp4"),
                        "first": os.path.join(out_dir, "first.png"), "kp2d": os.path.join(out_dir, "kp2d.json")}
 
@@ -254,6 +258,10 @@ def main():
     ap.add_argument("--data", default=os.path.join(os.getcwd(), "mock_data"),
                     help="Fallback project root parent when the add-on sends none")
     ap.add_argument("--speed", type=float, default=1.0, help="Multiplier on simulated delays")
+    ap.add_argument("--still-engine", default="CYCLES",
+                    help="first/last stills: EEVEE needs a GPU context, CYCLES runs anywhere")
+    ap.add_argument("--playblast-engine", default="CYCLES")
+    ap.add_argument("--resolution-scale", type=int, default=25, help="percent, for speed")
     ap.add_argument("-v", "--verbose", action="store_true")
     ARGS = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", ARGS.port), Handler)

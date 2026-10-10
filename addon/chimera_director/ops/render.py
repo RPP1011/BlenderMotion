@@ -5,6 +5,7 @@ import bpy
 from .. import scene_io, snapshot, sync
 from ..compat import vse_strips
 from ..client import OrchestratorError
+from . import rig_map
 from .common import ShotOperator, active_shot, get_client, project, push_shot, report_error, track_job
 
 
@@ -40,6 +41,9 @@ class CHIMERA_OT_render_passes(ShotOperator, bpy.types.Operator):
             "frames_wan": scene_io.wan_frame_count(n),
             "camera": scene_io.cam_name(shot.name),
             "characters": {c.char_id: c.rig_object.name for c in shot.characters if c.rig_object},
+            "bonemaps": {c.char_id: rig_map.load_or_guess(p, c.rig_object)
+                         for c in shot.characters if c.rig_object},
+            "resolution": [shot.resolution_x, shot.resolution_y],
         }
         try:
             push_shot(context, shot)

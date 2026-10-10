@@ -128,7 +128,31 @@ depth or line-art passes.
 
 **Passes body:** `{snapshot_path, scene_hash, scene, frame_in, frame_out
 (exclusive), frames, frames_wan, camera, characters: {char_id: rig object
-name}}`. The worker must hide characters that are not in the shot.
+name}, bonemaps: {char_id: {canonical joint: bone}}, resolution: [w, h]}`.
+The worker must hide characters that are not in the shot. `bonemaps` is the
+rig's saved bone map, or the name guess if none was saved.
+
+**Passes worker** (`blender_worker/passes.py`, run as `blender -b <snapshot>
+--python blender_worker/passes.py -- <spec.json>`; the spec is the body plus
+`out_dir`). Every output is `frames_wan` frames long: past the out-point the
+last pose is held, never trimmed.
+
+* `kp2d.json`: `{format: "coco18", joints, resolution, fps, frame_in,
+  frame_out, frames_held, frames: [{i, scene_frame, people: {char_id:
+  [[x, y, v] | null] * 18}}]}`. Pixels at the output resolution, origin top
+  left. `v = 0` when the joint is off screen or something other than the
+  character's own skin over it (within 0.15 m) blocks the ray from the camera.
+  Face points (nose, eyes, ears) have no bones and are always `null`, so PCK
+  must skip them. Joints come from bone heads: neck bone, upper arm, forearm,
+  hand, thigh, shin, foot.
+* `first.png` / `last.png`: beauty stills, EEVEE by default.
+* `playblast.mp4`: Workbench by default, encoded by Blender's own ffmpeg, so
+  the workstation needs no system ffmpeg.
+
+Optional spec keys `still_engine`, `playblast_engine` (`EEVEE`, `WORKBENCH`,
+`CYCLES`) and `resolution_scale` (percent). EEVEE and Workbench need an
+OpenGL/EGL context; on a box without a GPU, install Mesa's EGL (software GL
+works, slowly) or use `CYCLES`. The mock orchestrator defaults to Cycles at 25 %.
 
 **Artifacts.** Job artifacts are applied by key, idempotently, and may be
 partial while the job is still running:

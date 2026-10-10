@@ -1,13 +1,11 @@
 """Headless Blender worker for the mock orchestrator.
 
   blender -b --python mock_worker.py -- motion <spec.json> <out.blend>
-  blender -b <snapshot.blend> --python mock_worker.py -- passes <spec.json>
 
 `motion` stands in for motion server + retarget: it makes object-level root
 motion that follows the add-on's exported targets (inverting the canonical
 transform), so the round trip of constraints can be checked by eye.
-`passes` renders a low-res 1-sample Cycles playblast of the shot through its camera.
-It is not the real passes worker (no kp2d, depth or line art).
+Passes use the real worker, blender_worker/passes.py.
 """
 
 import json
@@ -76,48 +74,10 @@ def motion(spec_path, out_blend):
         json.dump(entries, f)
 
 
-def passes(spec_path):
-    with open(spec_path) as f:
-        spec = json.load(f)
-    scene = bpy.data.scenes[spec["scene"]]
-    scene.camera = bpy.data.objects[spec["camera"]]
-    scene.frame_start = spec["frame_in"]
-    scene.frame_end = spec["frame_out"] - 1
-    scene.render.use_sequencer = False
-    scene.render.use_compositing = False
-    # Cycles on CPU: Workbench/EEVEE need a GPU context (EGL), which headless
-    # CI boxes often lack. One sample is plenty for a review playblast.
-    scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
-    scene.cycles.samples = 1
-    scene.cycles.use_denoising = False
-    scene.render.resolution_percentage = 25
-    img = scene.render.image_settings
-    scene.render.ffmpeg.format = "MPEG4"
-    scene.render.ffmpeg.codec = "H264"
-    # first.png: the in-frame as a still (H3 first/last-frame input; shot card thumbnail).
-    scene.frame_set(spec["frame_in"])
-    if hasattr(img, "media_type"):
-        img.media_type = "IMAGE"
-    img.file_format = "PNG"
-    scene.render.filepath = os.path.join(spec["out_dir"], "first.png")
-    bpy.ops.render.render(write_still=True, scene=scene.name)
-    if hasattr(img, "media_type"):
-        img.media_type = "VIDEO"
-    img.file_format = "FFMPEG"
-    scene.render.filepath = os.path.join(spec["out_dir"], "playblast.mp4")
-    scene.render.use_file_extension = False
-    bpy.ops.render.render(animation=True, scene=scene.name)
-    with open(os.path.join(spec["out_dir"], "kp2d.json"), "w") as f:
-        json.dump({"note": "mock worker: no keypoints", "frames": []}, f)
-
-
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:]
     if argv[0] == "motion":
         motion(argv[1], argv[2])
-    elif argv[0] == "passes":
-        passes(argv[1])
     else:
         raise SystemExit(f"unknown mode {argv[0]}")
     print("MOCK_WORKER_OK", flush=True)

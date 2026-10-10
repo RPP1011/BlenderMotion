@@ -262,7 +262,12 @@ def test_e2e(url):
     shot = p.active_shot
     shot.action_prompt = "walks forward"
     shot.motion_variants = 2
-    shot.characters[0].rig_object = p.shots["sh_010"].characters[0].rig_object
+    # A full humanoid (demo rig) so the passes worker has COCO joints to project.
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+    import demo_scene  # noqa: E402
+    shot.characters[0].rig_object = demo_scene.make_rig()
+    cam = bpy.data.objects[f"CAM_{shot.name}"]
+    cam.location, cam.rotation_euler = (0.0, -8.0, 1.2), (math.radians(90), 0.0, 0.0)
     scene.cursor.location = (0, 0, 0)
     bpy.ops.chimera.add_start()
     bpy.ops.chimera.add_path()
@@ -292,6 +297,15 @@ def test_e2e(url):
     strips = compat.vse_strips(edit.sequence_editor) if edit else {}
     pb = strips.get(f"PB_{shot.name}") if edit else None
     check(pb is not None and pb.mute and pb.channel == 1, "playblast strip on ch1, muted")
+    if pb is not None:
+        with open(os.path.join(os.path.dirname(bpy.path.abspath(pb.filepath)), "kp2d.json")) as f:
+            kp = json.load(f)
+        rng = scene_io.shot_range(scene, shot.name)
+        n = rng[1] - rng[0]
+        check(len(kp["frames"]) == scene_io.wan_frame_count(n), "kp2d covers the 4n+1 frame count")
+        pts = [pt for fr in kp["frames"] for pt in fr["people"]["hero"]]
+        check(len(kp["frames"][0]["people"]["hero"]) == 18, "kp2d has COCO-18 joints")
+        check(any(pt and pt[2] for pt in pts), "kp2d has visible joints")
     check(not scene.sequence_editor or not len(compat.vse_strips(scene.sequence_editor)),
           "animation scene has no VSE strips")
 
