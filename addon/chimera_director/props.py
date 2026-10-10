@@ -82,17 +82,14 @@ class CHIMERA_PG_shot(bpy.types.PropertyGroup):
 
     look_prompt: StringProperty(name="Look")
 
-    render_path: EnumProperty(
-        name="Render path",
-        items=[("A", "A: VACE", "Pose/depth-controlled VACE"), ("B", "B: H3", "MiniMax H3")],
-    )
-    ctrl_pose: BoolProperty(name="Pose", default=True)
-    ctrl_depth: BoolProperty(name="Depth", default=True)
-    ctrl_line: BoolProperty(name="Line art", default=False)
-    steps: IntProperty(name="Steps", default=30, min=1, max=200)
     h3_mode: EnumProperty(
         name="H3 mode",
-        items=[("flf", "First/last frame", ""), ("ref2v", "Reference video", "")],
+        items=[
+            ("flf", "First/Last Frame", "Animate between the shot's first and last rendered frames. "
+                                        "Dependable; loses motion detail between the two frames"),
+            ("ref2v", "Reference Video", "Follow the playblast as a motion reference, "
+                                         "with the character refs for identity"),
+        ],
     )
     audio_prompt: StringProperty(name="Audio")
     resolution_x: IntProperty(name="Width", default=1280, min=64)
@@ -104,6 +101,7 @@ class CHIMERA_PG_shot(bpy.types.PropertyGroup):
     pck: FloatProperty(name="PCK@0.1", default=-1.0)
     identity_score: IntProperty(name="Identity (1-5)", default=0, min=0, max=5)
     extra_json: StringProperty(description="Unmodelled contract fields, preserved verbatim")
+    thumb_path: StringProperty(subtype="FILE_PATH", description="First frame from the passes, for the shot card")
 
     def stage(self, key):
         st = self.stages.get(key)
@@ -129,7 +127,16 @@ class CHIMERA_PG_project(bpy.types.PropertyGroup):
     start_frame: IntProperty(name="Timeline start", default=1)
 
     shots: CollectionProperty(type=CHIMERA_PG_shot)
-    active_shot_index: IntProperty(name="Active shot")
+    active_shot_index: IntProperty(name="Active shot", update=lambda self, ctx: _on_active_shot(self, ctx))
+    follow_playhead: BoolProperty(
+        name="Follow Playhead", default=True,
+        description="Make the shot under the playhead the active shot",
+    )
+    show_overlay: BoolProperty(
+        name="Director Overlays", default=True,
+        description="Draw shot bands on the timeline and target labels / HUD in the viewport",
+    )
+    show_settings: BoolProperty(name="Project Settings", default=False)
 
     server_status: StringProperty(default="unknown")
     server_detail: StringProperty()
@@ -148,6 +155,18 @@ class CHIMERA_PG_project(bpy.types.PropertyGroup):
 
     def find_shot(self, shot_id):
         return self.shots.get(shot_id)
+
+
+def _on_active_shot(project, context):
+    """Clicking a shot in the list jumps the playhead into it (unless it is already there)."""
+    from . import scene_io
+    shot = project.active_shot
+    scene = context.scene if context else None
+    if shot is None or scene is None or scene.chimera != project:
+        return
+    rng = scene_io.shot_range(scene, shot.name)
+    if rng and not rng[0] <= scene.frame_current < rng[1]:
+        scene.frame_current = rng[0]
 
 
 classes = (

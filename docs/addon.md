@@ -16,10 +16,40 @@ Tested on Blender **4.2.23 LTS** and **5.0.1** (`tests/run_tests.sh --e2e`).
 The UI is in the 3D Viewport sidebar, under the **Director** tab. Set the
 orchestrator URL in the add-on preferences (default `http://127.0.0.1:8765`).
 
+## UI
+
+![Director workspace](img/director_workspace.png)
+
+* **Director workspace** (button at the top of the panel). Authoring view with
+  the sidebar on the left, the active shot's camera on the right, and the NLA
+  below, where each shot's motion is a strip on track `SHOT_<id>`.
+* **Shot card.** It shows the thumbnail (first frame from the passes), the
+  wrapped action prompt (the pencil opens a wide editor), the duration, four
+  pipeline chips (Motion, Passes, Video, Eval) with live progress, and one big
+  **next step** button. That button always says what the shot needs next:
+  add a character, assign a rig, describe the action, generate motion, render
+  passes, generate video, or review. Failures and limits (H3 15 s, Kimodo
+  ~10 s, multi-character) show as red lines on the card.
+* **Viewport overlay.** The camera view gets a HUD with the shot, the prompt and
+  the stage chips. Targets get labels (`START · hero`, `hero @ f84`), and the
+  root path gets a tick and a label at every second.
+* **Timeline / NLA bands.** Each shot is drawn between its markers, coloured by
+  state (grey not run, blue running, green done, orange stale, red failed),
+  with the active shot outlined and a progress bar while a job runs.
+* **Follow Playhead** (on by default). Scrubbing into a shot makes it the
+  active shot, and picking a shot in the list moves the playhead into it.
+* **Status bar.** It shows running jobs, failures, and "Orchestrator offline".
+
+<p><img src="img/shot_card.png" width="290"> <img src="img/prompt_dialog.png" width="560"></p>
+
+`tests/gui_capture.sh` runs the real UI under Xvfb against the mock and
+screenshots each pipeline state. Use it after UI changes.
+
 ## Working without the real backend
 
 ```
 python tools/mock_orchestrator.py --blender /path/to/blender
+blender --python tools/demo_scene.py   # with the add-on enabled: rig, set, 3 shots, targets
 ```
 
 The mock implements the API below with no models. Motion jobs run a headless
@@ -40,8 +70,8 @@ stand in for the real worker. It produces no keypoints, depth or line art.
    **Effector**.
 4. **Generate Motion:** variants arrive as `MO_<shot>_<char>_v<n>`. Click a
    variant number to swap it in.
-5. **Render Control Passes**, then **Generate Video**. The strips appear in the
-   `<scene>_EDIT` scene.
+5. **Render Passes**, then **Generate Video** (H3: first/last frame or
+   reference video). The strips appear in the `<scene>_EDIT` scene.
 6. Edit the camera, motion or markers. The affected stages turn *stale*.
    Nothing re-runs until you click.
 
@@ -58,7 +88,7 @@ add-on needs them.
 | `POST /projects/{p}/plan` | `{brief, characters: [{char_id, rig}]}` | `{shots: [shot JSON]}` |
 | `POST …/shots/{s}/motion` | see below | `{job_id, status}` |
 | `POST …/shots/{s}/passes` | see below | `{job_id, status}` |
-| `POST …/shots/{s}/generate` | `{path: "A"\|"B"}` | `{job_id, status}` |
+| `POST …/shots/{s}/generate` | `{model: "h3", mode: "flf"\|"ref2v"}` | `{job_id, status}` |
 | `GET /jobs/{id}` | | `{shot, stage, status, progress, artifact, error}` |
 | `POST /jobs/{id}/cancel` | | |
 | `GET /health` | | flat `{name: status}` dictionary, shown in the panel |
@@ -92,6 +122,10 @@ the character faces +Z, and heading 0 means facing +Z. **This convention has not
 been checked against Kimodo.** It lives in one function,
 `constraints.to_canonical`.
 
+**Passes.** With VACE gone, the worker only needs `kp2d.json` (eval),
+`first.png` / `last.png` (H3 FLF) and `playblast.mp4` (H3 Ref2V). No pose,
+depth or line-art passes.
+
 **Passes body:** `{snapshot_path, scene_hash, scene, frame_in, frame_out
 (exclusive), frames, frames_wan, camera, characters: {char_id: rig object
 name}}`. The worker must hide characters that are not in the shot.
@@ -103,6 +137,7 @@ partial while the job is still running:
 |---|---|
 | `blend` + `actions: [{char, action, variant}]` | Appends the actions, renames them to `MO_<shot>_<char>_v<n>` after any existing variants, and puts the first one on the NLA |
 | `playblast` | Movie strip `PB_<shot>`, channel 1, muted |
+| `first` | Shot card thumbnail |
 | `video` | Movie strip `VID_<shot>`, channel 2 |
 | `audio` | Sound strip `AUD_<shot>`, channel 3 |
 | `pck` | PCK badge; marks eval done |

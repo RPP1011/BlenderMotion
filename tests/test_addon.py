@@ -103,12 +103,19 @@ def test_shots_and_contract():
     check("CAM_sh_010" in bpy.data.collections["SHOT_sh_010"].objects, "camera in SHOT_ collection")
 
     s1.action_prompt = "a man vaults over a low wall"
-    s1.render_path = "B"
+    s1.h3_mode = "ref2v"
     s1.extra_json = json.dumps({"hashes": {"motion": "abc"}, "look": {"style_refs": ["x.png"]}})
     d = contract.shot_to_dict(s1, p)
     check(d["hashes"] == {"motion": "abc"}, "unmodelled fields preserved")
     check(d["look"]["style_refs"] == ["x.png"], "nested unmodelled fields preserved")
-    check(d["render"]["path"] == "B" and d["render"]["a"]["controls"] == ["pose", "depth"], "render block")
+    check(d["render"]["model"] == "h3" and d["render"]["mode"] == "ref2v", "render block (H3 only)")
+    legacy = p.shots.add()
+    contract.dict_to_shot({"id": "old", "render": {"path": "A", "a": {"controls": ["pose"]},
+                                                   "b": {"mode": "ref2v", "audio_prompt": "wind"}}}, legacy, p)
+    ld = contract.shot_to_dict(legacy, p)
+    check(legacy.h3_mode == "ref2v" and legacy.audio_prompt == "wind", "legacy render.b block read")
+    check(not {"path", "a", "b"} & set(ld["render"]), "legacy VACE keys not written back")
+    p.shots.remove(len(p.shots) - 1)
     check(d["motion"]["selected_variant"] is None, "no variant selected -> null")
     tmp = p.shots.add()
     contract.dict_to_shot(d, tmp, p)
@@ -306,7 +313,7 @@ class FakeLayout:
     def __getattr__(self, name):  # alert, scale_x, enabled, ... and unknown calls
         if name in ("row", "column", "box", "split", "column_flow", "grid_flow"):
             return lambda *a, **k: FakeLayout(self.errors)
-        if name in ("label", "separator", "template_list", "menu"):
+        if name in ("label", "separator", "template_list", "menu", "template_icon", "progress"):
             return lambda *a, **k: None
         raise AttributeError(name)
 
@@ -344,17 +351,17 @@ def test_ui_draw():
     p = scene.chimera
     for shot_index in range(len(p.shots)):
         p.active_shot_index = shot_index
-        for path in ("A", "B"):
-            p.active_shot.render_path = path
+        for mode in ("flf", "ref2v"):
+            p.active_shot.h3_mode = mode
             for cls in ui.classes:
                 if not issubclass(cls, bpy.types.Panel):
                     continue
                 if hasattr(cls, "poll") and not cls.poll(bpy.context):
                     continue
                 fake = type("P", (), {"layout": FakeLayout(errors)})()
-                if hasattr(cls, "draw_header"):
-                    cls.draw_header(fake, bpy.context)
-                cls.draw(fake, bpy.context)
+                for fn in ("draw_header", "draw_header_preset", "draw"):
+                    if hasattr(cls, fn):
+                        getattr(cls, fn)(fake, bpy.context)
     shot = p.shots[0]
     ui.list_shots.CHIMERA_UL_shots.draw_item(None, bpy.context, FakeLayout(errors), p, shot, 0, p, "", 0)
     ui.list_shots.CHIMERA_UL_characters.draw_item(None, bpy.context, FakeLayout(errors), shot,
@@ -363,6 +370,15 @@ def test_ui_draw():
     bpy.ops.chimera.build_bonemap()
     ui.list_shots.CHIMERA_UL_bonemap.draw_item(None, bpy.context, FakeLayout(errors), p, p.bonemap[0], 0, p, "", 0)
     check(not errors, f"all drawn props/operators exist {errors}")
+    from chimera_director.ui import state
+    shot = p.shots["sh_010"]
+    check(state.next_step(shot)[0] in ("chimera.render_passes", "chimera.generate_motion"),
+          f"next step after motion ({state.next_step(shot)[1]})")
+    scene.frame_set(scene_io.shot_range(scene, "sh_020")[0] + 2)
+    check(p.active_shot.name == "sh_020", "follow playhead selects the shot under the frame")
+    p.active_shot_index = 0
+    check(scene_io.shot_range(scene, "sh_010")[0] <= scene.frame_current < scene_io.shot_range(scene, "sh_010")[1],
+          "selecting a shot moves the playhead into it")
 
 
 def main():

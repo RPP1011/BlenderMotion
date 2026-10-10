@@ -58,8 +58,8 @@ class Client:
     def passes(self, project, shot_id, body):
         return self._request("POST", self._s(project, shot_id) + "/passes", body)
 
-    def generate(self, project, shot_id, path):
-        return self._request("POST", self._s(project, shot_id) + "/generate", {"path": path})
+    def generate(self, project, shot_id, mode):
+        return self._request("POST", self._s(project, shot_id) + "/generate", {"model": "h3", "mode": mode})
 
     # -- jobs ----------------------------------------------------------------
     def job(self, job_id):

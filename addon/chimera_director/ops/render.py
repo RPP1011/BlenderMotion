@@ -53,7 +53,7 @@ class CHIMERA_OT_render_passes(ShotOperator, bpy.types.Operator):
 class CHIMERA_OT_generate_video(ShotOperator, bpy.types.Operator):
     bl_idname = "chimera.generate_video"
     bl_label = "Generate Video"
-    bl_description = "Run the shot's render path in ComfyUI on the latest control passes"
+    bl_description = "Generate the shot with H3 in ComfyUI from the latest passes"
 
     def execute(self, context):
         p = project(context)
@@ -66,7 +66,7 @@ class CHIMERA_OT_generate_video(ShotOperator, bpy.types.Operator):
         try:
             push_shot(context, shot)
             track_job(context, shot, "generate",
-                      get_client().generate(p.project_name, shot.name, shot.render_path))
+                      get_client().generate(p.project_name, shot.name, shot.h3_mode))
         except OrchestratorError as e:
             return report_error(self, e)
         shot.stage("generate").input_hash = passes.input_hash

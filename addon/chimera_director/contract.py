@@ -15,8 +15,6 @@ def _merge(base, over):
 
 
 def shot_to_dict(shot, project):
-    controls = [n for n, on in (("pose", shot.ctrl_pose), ("depth", shot.ctrl_depth),
-                                ("line", shot.ctrl_line)) if on]
     modelled = {
         "id": shot.name,
         "project": project.project_name,
@@ -48,14 +46,17 @@ def shot_to_dict(shot, project):
         },
         "look": {"prompt": shot.look_prompt or project.look_prompt},
         "render": {
-            "path": shot.render_path,
-            "a": {"controls": controls, "steps": shot.steps},
-            "b": {"mode": shot.h3_mode, "audio_prompt": shot.audio_prompt},
+            "model": "h3",
+            "mode": shot.h3_mode,
+            "audio_prompt": shot.audio_prompt,
             "resolution": [shot.resolution_x, shot.resolution_y],
         },
         "eval": {"identity_manual": shot.identity_score or None},
     }
     extra = json.loads(shot.extra_json) if shot.extra_json else {}
+    # VACE was dropped: never write the old path-A/B render layout back out.
+    for legacy in ("path", "a", "b"):
+        extra.get("render", {}).pop(legacy, None)
     return _merge(extra, modelled)
 
 
@@ -95,14 +96,14 @@ def dict_to_shot(d, shot, project=None):
     look = g("look", "prompt", default="") or ""
     shot.look_prompt = "" if project and look == project.look_prompt else look
 
-    shot.render_path = g("render", "path", default=shot.render_path)
-    controls = g("render", "a", "controls", default=None)
-    if controls is not None:
-        shot.ctrl_pose, shot.ctrl_depth, shot.ctrl_line = ("pose" in controls,
-                                                            "depth" in controls, "line" in controls)
-    shot.steps = int(g("render", "a", "steps", default=shot.steps))
-    shot.h3_mode = g("render", "b", "mode", default=shot.h3_mode)
-    shot.audio_prompt = g("render", "b", "audio_prompt", default=shot.audio_prompt) or ""
+    mode = g("render", "mode", default=None) or g("render", "b", "mode", default=None)  # legacy "b" block
+    if mode in ("flf", "ref2v"):
+        shot.h3_mode = mode
+    audio = g("render", "audio_prompt", default=None)
+    if audio is None:
+        audio = g("render", "b", "audio_prompt", default=None)
+    if audio is not None:
+        shot.audio_prompt = audio
     res = g("render", "resolution", default=None)
     if res:
         shot.resolution_x, shot.resolution_y = int(res[0]), int(res[1])

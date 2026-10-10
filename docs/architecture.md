@@ -5,6 +5,14 @@ Companion to the "Blender × Text-to-Motion × H3" proposal deck.
 
 > Implementation notes for the add-on, including where it deviates from this
 > document and why, are in [addon.md](addon.md).
+>
+> **Decision, 2026-10-10: VACE is dropped. H3 is the only video model.**
+> Everything below about Path A / VACE (§4.3 pose/depth/line passes, §4.4
+> Path A, VACE segment extension in §4.4a, VACE residency in §7, the P0 VACE
+> comparison) is superseded. The passes the pipeline still needs are
+> `kp2d.json` (eval), `first.png` / `last.png` (H3 first/last frame) and
+> `playblast.mp4` (H3 reference video). The shot JSON `render` block is now
+> `{"model": "h3", "mode": "flf" | "ref2v", "audio_prompt", "resolution"}`.
 
 ---
 

@@ -27,9 +27,11 @@ def register():
         bpy.utils.register_class(cls)
     props.register()
     sync.register()
+    ui.register()
 
 
 def unregister():
+    ui.unregister()
     sync.unregister()
     props.unregister()
     for cls in reversed(_classes):

@@ -8,6 +8,7 @@ artifacts while still running (e.g. the video before eval finishes):
   {"playblast": path}                                          -> muted VSE strip, channel 1
   {"video": path}                                              -> VSE strip VID_<id>, channel 2
   {"audio": path}                                              -> VSE sound strip, channel 3
+  {"first": path}                                             -> shot card thumbnail
   {"pck": float}                                               -> score badge
 """
 
@@ -99,6 +100,8 @@ def _apply_artifact(scene, shot, job_id, art):
                                  channel, rng[0] if rng else scene.frame_start, mute=mute)
             if key == "video":
                 shot.stage("generate").status = "done"
+    if "first" in art and _once(job_id, "first", art["first"]):
+        shot.thumb_path = art["first"]
     if "pck" in art and art["pck"] is not None:
         shot.pck = float(art["pck"])
         shot.stage("eval").status = "done"
@@ -192,6 +195,23 @@ def _on_depsgraph(scene, depsgraph):
 
 
 @persistent
+def _on_frame(scene, _depsgraph=None):
+    p = getattr(scene, "chimera", None)
+    if p is None or not p.follow_playhead or not len(p.shots):
+        return
+    active = p.active_shot
+    f = scene.frame_current
+    rng = scene_io.shot_range(scene, active.name) if active else None
+    if rng and rng[0] <= f < rng[1]:
+        return
+    for i, shot in enumerate(p.shots):
+        rng = scene_io.shot_range(scene, shot.name)
+        if rng and rng[0] <= f < rng[1]:
+            p.active_shot_index = i
+            return
+
+
+@persistent
 def _on_load(_dummy):
     _applied.clear()
     resume_watching()
@@ -201,6 +221,7 @@ def _on_load(_dummy):
 def register():
     bpy.app.handlers.depsgraph_update_post.append(_on_depsgraph)
     bpy.app.handlers.load_post.append(_on_load)
+    bpy.app.handlers.frame_change_post.append(_on_frame)
     if not bpy.app.timers.is_registered(tick):
         bpy.app.timers.register(tick, first_interval=TICK_S, persistent=True)
     events.WATCHER.start()
@@ -212,6 +233,7 @@ def unregister():
     if bpy.app.timers.is_registered(tick):
         bpy.app.timers.unregister(tick)
     for lst, fn in ((bpy.app.handlers.depsgraph_update_post, _on_depsgraph),
-                    (bpy.app.handlers.load_post, _on_load)):
+                    (bpy.app.handlers.load_post, _on_load),
+                    (bpy.app.handlers.frame_change_post, _on_frame)):
         if fn in lst:
             lst.remove(fn)

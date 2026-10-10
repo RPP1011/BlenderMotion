@@ -8,8 +8,8 @@ end to end before the real orchestrator, motion server and ComfyUI exist.
 
 With --blender, motion and passes jobs run real headless Blender workers
 (tools/mock_worker.py): motion = procedural root motion that follows the
-authored targets; passes = a 1-sample Cycles playblast. "generate" copies the
-playblast as the output video and reports a random PCK. Without --blender,
+authored targets; passes = a 1-sample Cycles playblast. "generate" (H3 only) copies
+the playblast as the output video and reports a random PCK. Without --blender,
 motion/passes jobs fail with a clear message; plan/shots/health still work.
 """
 
@@ -131,7 +131,7 @@ def do_passes(job, proj, shot_id, body):
     write_json(spec_path, {**body, "out_dir": out_dir})
     run_blender(job, [body["snapshot_path"], "--python", WORKER, "--", "passes", spec_path])
     job["artifact"] = {"dir": out_dir, "playblast": os.path.join(out_dir, "playblast.mp4"),
-                       "kp2d": os.path.join(out_dir, "kp2d.json")}
+                       "first": os.path.join(out_dir, "first.png"), "kp2d": os.path.join(out_dir, "kp2d.json")}
 
 
 def do_generate(job, proj, shot_id, body):

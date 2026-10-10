@@ -93,11 +93,18 @@ def passes(spec_path):
     scene.cycles.use_denoising = False
     scene.render.resolution_percentage = 25
     img = scene.render.image_settings
+    scene.render.ffmpeg.format = "MPEG4"
+    scene.render.ffmpeg.codec = "H264"
+    # first.png: the in-frame as a still (H3 first/last-frame input; shot card thumbnail).
+    scene.frame_set(spec["frame_in"])
+    if hasattr(img, "media_type"):
+        img.media_type = "IMAGE"
+    img.file_format = "PNG"
+    scene.render.filepath = os.path.join(spec["out_dir"], "first.png")
+    bpy.ops.render.render(write_still=True, scene=scene.name)
     if hasattr(img, "media_type"):
         img.media_type = "VIDEO"
     img.file_format = "FFMPEG"
-    scene.render.ffmpeg.format = "MPEG4"
-    scene.render.ffmpeg.codec = "H264"
     scene.render.filepath = os.path.join(spec["out_dir"], "playblast.mp4")
     scene.render.use_file_extension = False
     bpy.ops.render.render(animation=True, scene=scene.name)

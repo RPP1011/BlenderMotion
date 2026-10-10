@@ -1,8 +1,6 @@
 from .. import props
 
 STATUS_ICON = {i[0]: i[3] for i in props.STATUS_ITEMS}
-STAGE_LABEL = {"motion": "Motion", "retarget": "Retarget", "passes": "Passes",
-               "generate": "Video", "eval": "Eval"}
 
 
 def stage_icon(shot, key):
@@ -14,3 +12,10 @@ class SidebarPanel:
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Director"
+
+
+def progress(layout, factor, text):
+    if hasattr(layout, "progress"):  # 4.0+
+        layout.progress(factor=factor, type="BAR", text=text)
+    else:
+        layout.label(text=f"{text} {int(factor * 100)}%")
