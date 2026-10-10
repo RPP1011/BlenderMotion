@@ -45,7 +45,54 @@ orchestrator URL in the add-on preferences (default `http://127.0.0.1:8765`).
 `tests/gui_capture.sh` runs the real UI under Xvfb against the mock and
 screenshots each pipeline state. Use it after UI changes.
 
-## Working without the real backend
+## Backends
+
+The add-on talks to one orchestrator over HTTP. Two implement the contract below.
+
+### Real orchestrator (`server/`)
+
+Self-hosted, stdlib Python 3.10+, no hosted APIs. Each stage is a backend
+chosen in a JSON (or TOML, Python 3.11+) config:
+
+| Stage | Backend | Runs |
+|---|---|---|
+| motion | `kimodo` | `kimodo_gen` in Kimodo's venv on its own GPU; takes ranked from the `.npz`, floating / teleporting takes rejected |
+| retarget | `blender` | `server/workers/retarget.py`: BVH onto your rig from the rest pose the add-on sends |
+| passes | `blender` | `blender_worker/passes.py` on the snapshot |
+| generate | `comfyui` | MiniMax H3 (Ref2V with reference images + playblast, or FLF) on a local ComfyUI |
+| eval | `dwpose` | PCK@0.1 of the video vs `kp2d.json` (rtmlib DWPose) |
+
+Every stage also has a `fake` backend (`--fake` for all of them). Example for
+an RTX 5090 + RTX 4090 workstation, H3 on GPU0 and Kimodo on GPU1
+(`server/config.example.json`):
+
+```jsonc
+{
+  "blender": "/opt/blender-5.0.1-linux-x64/blender",
+  "gpus": {
+    "gpu0": {"env": {"CUDA_DEVICE_ORDER": "PCI_BUS_ID", "CUDA_VISIBLE_DEVICES": "0"}},  // 5090
+    "gpu1": {"env": {"CUDA_DEVICE_ORDER": "PCI_BUS_ID", "CUDA_VISIBLE_DEVICES": "1"}}   // 4090
+  },
+  "motion":   {"backend": "kimodo", "device": "gpu1", "venv": "~/kimodo/.venv", "num_samples": 4},
+  "retarget": {"backend": "blender"},
+  "passes":   {"backend": "blender"},
+  "generate": {"backend": "comfyui", "device": "gpu0", "url": "http://127.0.0.1:8188"},
+  "eval":     {"backend": "dwpose", "python": "~/dwpose/.venv/bin/python"}
+}
+```
+
+```
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 python main.py --port 8188   # in ComfyUI
+python -m server.orchestrator --config server/config.example.json                # in this repo
+```
+
+A job holds its GPU's lock only while that stage runs, so Kimodo and H3 never
+share a card, and on two cards they run side by side. `GET /health` reports
+each backend (Kimodo venv, Blender version, ComfyUI and its H3 nodes, the eval
+interpreter) and what each GPU is doing. Details, cache and job store layout,
+and the retarget method are in [server/README.md](../server/README.md).
+
+### Mock (`tools/mock_orchestrator.py`)
 
 ```
 python tools/mock_orchestrator.py --blender /path/to/blender
@@ -58,6 +105,9 @@ waypoint targets, so you can check the constraint round trip by eye. Passes
 jobs render a low-res playblast. Generate jobs copy the playblast as the
 "video" and report a random PCK. It is there to exercise the add-on, not to
 stand in for the real worker. It produces no keypoints, depth or line art.
+`tests/run_tests.sh --e2e` runs the add-on suite against the mock,
+`--e2e-server` against `server/` with fake models but the real Blender
+retarget and passes workers.
 
 ## Workflow in the panel
 
@@ -107,6 +157,11 @@ data the orchestrator cannot see:
     "hero": {
       "start_matrix_world": [[...4x4...]],  // null if no START placed
       "scale": 0.5,                         // soma_hip / rig_hip; worker divides on the way back
+      "rig": {                              // added: rest pose for the retarget worker (absent if no rig)
+        "object": "HeroRig", "matrix_world": [[...]], "bonemap": {"pelvis": "Hips", ...},
+        "bones": [{"name": "Hips", "parent": null, "matrix_local": [[...]], "length": 0.1,
+                   "rotation_mode": "QUATERNION"}, ...]
+      },
       "constraints": [
         // root2d uses Kimodo's own field names; heading is [cos, sin] of the yaw
         {"type": "root2d", "frame_indices": [0..n-1], "smooth_root_2d": [[x,z]...], "global_root_heading": [[c,s]...]},
@@ -123,7 +178,19 @@ the character faces +Z, and heading 0 means facing +Z. **Checked against
 Kimodo SOMA-RP v1.1 on 2026-10-10**: Y-up, metres, heading 0 faces +Z, left is
 +X. Kimodo outputs **30 fps**, so the motion server must resample to 24.
 `end_effector` stays in this orchestrator format: Kimodo wants a full pose
-there, so the motion server IK-solves one.
+there. The server does not IK-solve one yet; it drops these with a job warning.
+
+`rig` (added) is the rig's rest pose and its saved bone map (or the name
+guess). The orchestrator rebuilds the armature from it in a headless Blender
+and keys the actions for the real rig's bones, so it never opens your file.
+Without it the server falls back to the shot's library rig
+(`characters[].rig = "file.blend#Object"`), then to unretargeted SOMA actions.
+
+**Reference images (H3 Ref2V)** come from fields that round-trip through the
+add-on: `characters[].refs` (per character, tagged `<Picture N>` in the prompt
+as that character) and `look.style_refs` (tagged as the look). Paths are
+absolute, project-root relative or `//`-relative; at most 9 are sent. Optional
+`render.prompt` replaces the generated prompt and `render.seed` the default seed.
 
 **Passes.** With VACE gone, the worker only needs `kp2d.json` (eval),
 `first.png` / `last.png` (H3 FLF) and `playblast.mp4` (H3 Ref2V). No pose,
