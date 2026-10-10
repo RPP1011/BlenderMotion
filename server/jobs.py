@@ -69,10 +69,12 @@ class Job:
             return out
 
     def update(self, **kw):
+        # Persist and mirror into the shot's stage table before readers
+        # (public() takes the same lock) can see the new state.
         with self.lock:
             self.data.update(kw)
             self.data["updated"] = time.time()
-        self.store.changed(self)
+            self.store.changed(self)
 
     # -- used by backends --------------------------------------------------------------
     def set_stage(self, stage, progress=None):
