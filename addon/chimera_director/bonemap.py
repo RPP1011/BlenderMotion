@@ -62,12 +62,17 @@ def guess(bone_names):
     order in practice), because numbering differs per rig: Mixamo starts at
     Spine, others at spine_01, Rigify's DEF-spine is the pelvis."""
     parsed = [(b, *_split(b)) for b in bone_names]
+    patterns = dict(_PATTERNS)
+    if any(core == "shin" for _, _, core in parsed):
+        # SOMA (Kimodo) style: Leg -> Shin -> Foot, so "leg" is the thigh.
+        patterns["hip"] = [r"^(thigh|upleg|upperleg|leg)$"]
+        patterns["knee"] = [r"^(calf|shin|lowerleg)$"]
     result = {}
     for joint in CANONICAL_JOINTS:
         if joint.startswith("spine"):
             continue
         side, key = (joint[0], joint[2:]) if joint[1] == "_" else (None, joint)
-        for rx in _PATTERNS.get(key, []):
+        for rx in patterns.get(key, []):
             hit = next((b for b, s, core in parsed if s == side and re.match(rx, core)
                         and b not in result.values()), None)
             if hit:

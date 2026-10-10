@@ -81,6 +81,14 @@ def test_pure():
     check(g.get("spine1") == "mixamorig:Spine" and g.get("spine3") == "mixamorig:Spine2", "mixamo spine chain")
     rigify = ["DEF-spine", "DEF-spine.001", "DEF-thigh.L", "DEF-shin.L", "DEF-foot.L", "DEF-thigh.R",
               "DEF-upper_arm.L", "DEF-forearm.L", "DEF-hand.L", "DEF-head"]
+    soma = ["Hips", "Spine1", "Spine2", "Chest", "Neck1", "Neck2", "Head", "LeftShoulder", "LeftArm",
+            "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand",
+            "LeftLeg", "LeftShin", "LeftFoot", "LeftToeBase", "RightLeg", "RightShin", "RightFoot",
+            "RightToeBase"]
+    g = rig_map.guess(soma)
+    check(g.get("l_hip") == "LeftLeg" and g.get("l_knee") == "LeftShin" and g.get("r_ankle") == "RightFoot",
+          "SOMA legs: Leg is the thigh, Shin the knee")
+    check(len(g) == len(rig_map.CANONICAL_JOINTS), f"SOMA auto-map complete ({len(g)}/22)")
     g = rig_map.guess(rigify)
     check(g.get("l_hip") == "DEF-thigh.L" and g.get("l_knee") == "DEF-shin.L" and g.get("r_hip") == "DEF-thigh.R",
           "rigify legs with .L/.R suffix")
