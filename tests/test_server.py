@@ -494,24 +494,30 @@ class HttpBehaviour(unittest.TestCase):
         # motion and generate both on gpu0: the second job waits for the card
         self.h = Harness(sets=["motion.fake_delay_s=0.4", "motion.device=\"gpu0\"",
                                "generate.fake_delay_s=1.0"])
+        spans = []
+
+        def timed(fn, name):
+            def wrapper(*a, **k):
+                t = time.monotonic()
+                try:
+                    return fn(*a, **k)
+                finally:
+                    spans.append((name, t, time.monotonic()))
+            return wrapper
+        self.h.app.motion.generate = timed(self.h.app.motion.generate, "kimodo")
+        self.h.app.generate.generate = timed(self.h.app.generate.generate, "h3")
         snap = self.h.setup_shot()
         self.h.c.put_shot("demo", "sh_020", shot_json("sh_020"))
         self.h.wait(self.h.c.passes("demo", "sh_020", passes_body(snap))["job_id"])
         g = self.h.c.generate("demo", "sh_020", "ref2v")["job_id"]
         self.h.wait(g, until=("running",))
         m = self.h.c.motion("demo", "sh_010", motion_body())["job_id"]
-        seen = set()
-        t0 = time.time()
-        while time.time() - t0 < 20:
-            jm, jg = self.h.c.job(m), self.h.c.job(g)
-            seen.add((jm["status"], jg["status"], jg["stage"]))
-            if jm["status"] == "done":
-                break
-            time.sleep(0.02)
-        self.assertIn(("waiting_gpu", "running", "generate"), seen)
-        self.assertNotIn(("running", "running", "generate"), seen)  # never both on gpu0
+        self.assertEqual(self.h.wait(m, until=("waiting_gpu", "running", "done"))["status"], "waiting_gpu")
         self.assertEqual(self.h.wait(g)["status"], "done")
         self.assertEqual(self.h.wait(m)["status"], "done")
+        (_, h0, h1), = [s for s in spans if s[0] == "h3"]
+        for _, k0, k1 in (s for s in spans if s[0] == "kimodo"):
+            self.assertTrue(k0 >= h1 or k1 <= h0, "Kimodo and H3 overlapped on gpu0")
 
     def test_different_devices_overlap(self):
         self.h = Harness(sets=["motion.fake_delay_s=0.6"])
