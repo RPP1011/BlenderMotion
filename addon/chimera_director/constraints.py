@@ -120,6 +120,23 @@ def sample_curve(obj, n):
     return out
 
 
+def rig_payload(rig, bonemap):
+    """Rest pose of a rig, sent with POST /motion so the orchestrator can
+    retarget onto it without opening the user's file (docs/addon.md)."""
+    return {
+        "object": rig.name,
+        "matrix_world": [[round(x, 6) for x in row] for row in rig.matrix_world],
+        "bonemap": dict(bonemap or {}),
+        "bones": [{
+            "name": b.name,
+            "parent": b.parent.name if b.parent else None,
+            "matrix_local": [[round(x, 6) for x in row] for row in b.matrix_local],
+            "length": round(b.length, 6),
+            "rotation_mode": rig.pose.bones[b.name].rotation_mode,
+        } for b in rig.data.bones],
+    }
+
+
 def export(scene, project, shot, soma_hip_height):
     """Build the per-character constraint payload for POST /motion."""
     n_frames = scene_io.frames_for(shot, project.fps)
