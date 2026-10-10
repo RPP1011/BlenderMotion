@@ -88,9 +88,9 @@ def main():
         inputs = {"clip": ["clip", 0], "vae": ["vvae", 0], "audio_vae": ["avae", 0], "prompt": prompt,
                   "width": w, "height": h, "length": frames, "ref_image_size": "match",
                   "ref_videos.ref_video_0": ["refc", 0]}
-        if len(rest) > 4:
-            g["refi"] = {"class_type": "LoadImage", "inputs": {"image": stage_input(rest[4])}}
-            inputs["ref_images.ref_image_0"] = ["refi", 0]
+        for k, img in enumerate(rest[4:13]):  # up to 9 reference images, tagged Picture 1..N
+            g[f"refi{k}"] = {"class_type": "LoadImage", "inputs": {"image": stage_input(img)}}
+            inputs[f"ref_images.ref_image_{k}"] = [f"refi{k}", 0]
         g["cond"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": inputs}
     t0 = time.time()
     r = post("/prompt", {"prompt": g, "client_id": "p0"})

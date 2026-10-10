@@ -52,3 +52,14 @@ Same walk job (124 frames, 960x544, seed 42), ComfyUI unless noted. `H3_LORA` / 
   (short edge 544 is outside its verified 768 recipe). Its single-5090 desktop recipe is in the SGLang
   MiniMax-H3 cookbook.
 - Target hardware is a local RTX 5090 + RTX 4090 (no hosted APIs).
+
+## Multi-cut scene at 2 MP (RTX PRO 6000 96 GB, 2026-10-10)
+
+Four shots, three environments, two characters, 1920x1088, 8-step Ref2V turbo LoRA. `build_seq.py` stages
+each shot (rooftop, corridor, street meet, over-the-shoulder talk) from Kimodo BVHs; `h3run.py ref2v`
+takes up to 9 reference images. Identity comes from H3 turntable character sheets: a 360-degree orbit
+around a standing clip, cropped to front/three-quarter/side/back with `crop.py`, passed as Picture 1-8.
+
+- Identity held across all cuts; motion follows the mannequins. Signage text is garbled.
+- Time per shot: 124 frames ~10-11 min (~72 s/step), 192 frames ~24 min (~166 s/step).
+- `fx.py` adds EEVEE haze, neon lights, DoF and motion blur to a shot for the FX carry-over test.
