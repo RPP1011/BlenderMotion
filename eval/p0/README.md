@@ -32,3 +32,23 @@ Blender 5.0.1 and ComfyUI (>= 0.30, MiniMax H3 models) on localhost:8188.
 - DWPose ran on CPU (no CUDA provider in onnxruntime): ~22 min per clip.
 
 Kimodo conventions verified: 30 fps, Y-up, metres, heading 0 faces +Z, left = +X, hips ~1.0 m.
+
+## Speed follow-up (RTX PRO 6000 96 GB, 2026-10-10)
+
+Same walk job (124 frames, 960x544, seed 42), ComfyUI unless noted. `H3_LORA` / `H3_STEPS` env vars on
+`h3run.py` add a LoRA and set the step count; `sgreq.py` sends the job to an SGLang server.
+
+| run | steps | s/step | PCK@0.1 | audio mean |
+|---|---|---|---|---|
+| ComfyUI base | 20 | 9.9 | 0.953 | -39 dB |
+| ComfyUI + LightX2V `ref2v_turbo_8step_v1.0_768p` | 8 | 9.7 | **0.982** | -39 dB |
+| ComfyUI + LightX2V `ref2v_turbo_4step_v0.1` | 4 | 9.7 | 0.818 | -14 dB (noise) |
+| SGLang 0.5.21, same int8 DiT, TE layerwise | 20 | 22 | 0.675 | -17 dB |
+
+- The 46 min on the 32 GB 5090 pod was ComfyUI offloading, not compute: 4 min on 96 GB.
+- 8-step Ref2V turbo keeps (slightly beats) base motion adherence and audio level at ~40% of the time.
+  4-step loses motion and audio.
+- SGLang on one card with the pruned int8 file was slower and worse here; not tuned further
+  (short edge 544 is outside its verified 768 recipe). Its single-5090 desktop recipe is in the SGLang
+  MiniMax-H3 cookbook.
+- Target hardware is a local RTX 5090 + RTX 4090 (no hosted APIs).

@@ -30,8 +30,9 @@ def stage_input(path):
     return name
 
 
-def common(unet, cond_node, frames, seed, steps=20):
-    return {
+def common(unet, cond_node, frames, seed, steps=None):
+    steps = steps or int(os.environ.get("H3_STEPS", "20"))
+    g = {
         "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": unet, "weight_dtype": "default"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
                                                         "type": "minimax", "device": "default"}},
@@ -52,6 +53,13 @@ def common(unet, cond_node, frames, seed, steps=20):
         "save": {"class_type": "SaveVideo", "inputs": {"video": ["video", 0], "filename_prefix": "video/p0",
                                                        "format": "mp4", "codec": "auto"}},
     }
+    lora = os.environ.get("H3_LORA")
+    if lora:  # turbo LoRA: patch the model feeding the scheduler and guider
+        g["lora"] = {"class_type": "LoraLoaderModelOnly",
+                     "inputs": {"model": ["unet", 0], "lora_name": lora, "strength_model": 1.0}}
+        g["sched"]["inputs"]["model"] = ["lora", 0]
+        g["guider"]["inputs"]["model"] = ["lora", 0]
+    return g
 
 
 def main():
