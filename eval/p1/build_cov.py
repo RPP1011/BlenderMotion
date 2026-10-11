@@ -134,6 +134,43 @@ def drop_islands(obj, min_verts):
     print("ISLANDS dropped", len(kill), "verts from", obj.name)
 
 
+def settle_ground(plates):
+    """Re-level the set in world space: fit the ground line z = a*y + b (10th-percentile z per 2 m depth bin near the
+    centre line, foreground layer) and rotate/translate the plates so it lies on z = 0. The camera-space plane fit in
+    moge_mesh.py only sees the nearest rows; this one spans the whole square."""
+    import numpy as np
+    fg = next(o for o in plates if o.name == "plate_fg")
+    mw = np.array(fg.matrix_world)
+    co = np.array([v.co[:] for v in fg.data.vertices])
+    w = co @ mw[:3, :3].T + mw[:3, 3]
+    ys, zs = [], []
+    for y0 in np.arange(w[:, 1].min(), w[:, 1].max(), 2.0):
+        m = (w[:, 1] >= y0) & (w[:, 1] < y0 + 2) & (np.abs(w[:, 0]) < 4)
+        if m.sum() > 200:
+            ys.append(y0 + 1)
+            zs.append(np.percentile(w[m, 2], 10))
+    a, b = np.polyfit(ys, zs, 1)
+    fix = Matrix.Translation((0, 0, -b)) @ Matrix.Rotation(-math.atan(a), 4, "X")
+    for o in plates:
+        o.matrix_world = fix @ o.matrix_world
+    print("SETTLE slope %.4f offset %.2f over %d bins" % (a, b, len(ys)))
+
+
+def grey_ground(obj, mat, zmax):
+    """Give set-mesh faces on the ground (all verts below zmax, world) a plain lit material that H3 re-renders,
+    keeping the mesh's own ground shape so it still meets the facades."""
+    obj.data.materials.append(mat)
+    slot = len(obj.data.materials) - 1
+    mw = obj.matrix_world
+    zs = [(mw @ v.co).z for v in obj.data.vertices]
+    n = 0
+    for poly in obj.data.polygons:
+        if max(zs[i] for i in poly.vertices) < zmax:
+            poly.material_index = slot
+            n += 1
+    print("GROUND", obj.name, n, "faces")
+
+
 def flat(angle_deg, length=1.0):
     a = math.radians(angle_deg)
     return Vector((math.cos(a), math.sin(a), 0)) * length
@@ -208,9 +245,13 @@ if mode == "plate":
         plate.data.materials.append(m)
         if plate.name == "plate_fg":
             drop_islands(plate, int(os.environ.get("MIN_ISLAND", "3000")))
-        # vertices arrive camera-local (Y up, -Z forward) without axis conversion: turn to "looking +Y, Z up"
-        plate.matrix_world = (Matrix.Translation(PLATE_CAM) @ Matrix.Rotation(math.radians(90), 4, "X")
-                              @ Matrix(info["level"]))
+    settle_ground([o for o in scene.objects if o.name.startswith("plate_")])
+    if os.environ.get("GREY_GROUND", "1") == "1":
+        # The ground is where the plate breaks first (grazing angle, view-dependent wet reflections), and H3 copies
+        # textured pixels: leave the ground grey so H3 re-renders it.
+        gm = material("GroundGrey", (0.2, 0.2, 0.21))
+        for plate in [o for o in scene.objects if o.name.startswith("plate_")]:
+            grey_ground(plate, gm, float(os.environ.get("GROUND_CUT", "0.3")))
     w = bpy.data.worlds.new("World")
     w.use_nodes = True
     w.node_tree.nodes["Background"].inputs["Color"].default_value = (*info.get("mean_rgb", (0.05, 0.05, 0.07)), 1)

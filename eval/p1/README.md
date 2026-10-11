@@ -13,6 +13,13 @@ Goal: fix the first multi-cut sequence (set changed between cuts, flat staging, 
    CAM_ots and CAM_close over overlapping frame ranges (editorial handles). `RIG_A` / `RIG_B` optionally swap mannequins for textured rigs.
 5. **H3**: Ref2V, 8-step turbo LoRA, playblast as Video 1, 4+4 character-sheet views + the set image as Picture 9 (`run_coverage.sh`); `cut.sh` trims and concatenates.
 
+## Final recipe (v5)
+
+Textured set mesh for the buildings, **grey lit ground**, grey mannequins, set image as Picture 9. Same doors, windows and
+shop signs from every angle; H3 renders the wet cobblestones itself, so the ground no longer smears.
+The earlier variants below had the set ground ~2 m below the characters (the camera-space plane fit in `moge_mesh.py`
+only sees the nearest rows); `build_cov.py` now re-levels the set in world space (`settle_ground`) before anything else.
+
 ## Findings (1 MP unless noted, ~3.5-5.5 min per shot)
 
 | Variant | Set continuity | Camera/framing adherence | Look |
@@ -26,6 +33,7 @@ Goal: fix the first multi-cut sequence (set changed between cuts, flat staging, 
   Rule: **textured set, grey characters**.
 - FX (haze, neon, DoF, motion blur) in the render do not carry over; only described looks do (see eval/p0 results).
 - The handshake lands when the mannequins' hands come within ~0.4 m; H3 closes the gap.
+- Small floating fragments of the foreground layer are dropped (`drop_islands`); ground faces get a grey material (`grey_ground`).
 - One set image cannot cover a reverse angle; a second set image generated with the first as a reference came back as a near copy.
 - Bugs fixed on the way: stacked COPY_LOCATION influences are a running blend (use w_i / sum(w_0..w_i)); rtlib's retarget
   scale must be 1.0 when the clip is far from the origin; passes `characters` must name the skinned armature when rigs are swapped in.
