@@ -1,7 +1,8 @@
 """Queue one H3 generation on the local ComfyUI and wait for the mp4.
 
 python h3run.py flf  <first.png> <last.png> <prompt> <out.mp4> [frames] [w h] [seed]
-python h3run.py ref2v <ref_video.mp4> <prompt> <out.mp4> [frames] [w h] [seed] [ref_image.png]
+python h3run.py ref2v <ref_video.mp4> <prompt> <out.mp4> [frames] [w h] [seed] [ref_image.png ...]
+python h3run.py t2v   - <prompt> <out.mp4> [frames] [w h] [seed] [ref_image.png ...]  (no reference video)
 """
 import json
 import os
@@ -83,11 +84,12 @@ def main():
             "length": frames, "first_frame": ["first", 0], "last_frame": ["last", 0]}}
     else:
         g = common("minimax_h3_ref2va_pruned_int8_convrot.safetensors", "cond", frames, seed)
-        g["refv"] = {"class_type": "LoadVideo", "inputs": {"file": stage_input(ref)}}
-        g["refc"] = {"class_type": "GetVideoComponents", "inputs": {"video": ["refv", 0]}}
         inputs = {"clip": ["clip", 0], "vae": ["vvae", 0], "audio_vae": ["avae", 0], "prompt": prompt,
-                  "width": w, "height": h, "length": frames, "ref_image_size": "match",
-                  "ref_videos.ref_video_0": ["refc", 0]}
+                  "width": w, "height": h, "length": frames, "ref_image_size": "match"}
+        if mode != "t2v":
+            g["refv"] = {"class_type": "LoadVideo", "inputs": {"file": stage_input(ref)}}
+            g["refc"] = {"class_type": "GetVideoComponents", "inputs": {"video": ["refv", 0]}}
+            inputs["ref_videos.ref_video_0"] = ["refc", 0]
         for k, img in enumerate(rest[4:13]):  # up to 9 reference images, tagged Picture 1..N
             g[f"refi{k}"] = {"class_type": "LoadImage", "inputs": {"image": stage_input(img)}}
             inputs[f"ref_images.ref_image_{k}"] = [f"refi{k}", 0]
