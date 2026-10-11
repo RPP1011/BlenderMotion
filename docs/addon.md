@@ -18,6 +18,8 @@ orchestrator URL in the add-on preferences (default `http://127.0.0.1:8765`).
 
 ## UI
 
+A step-by-step walkthrough with clips is in [tutorial.md](tutorial.md).
+
 ![Director workspace](img/director_workspace.png)
 
 * **Director workspace** (button at the top of the panel). Authoring view with
@@ -89,8 +91,8 @@ python -m server.orchestrator --config server/config.example.json               
 A job holds its GPU's lock only while that stage runs, so Kimodo and H3 never
 share a card, and on two cards they run side by side. `GET /health` reports
 each backend (Kimodo venv, Blender version, ComfyUI and its H3 nodes, the eval
-interpreter) and what each GPU is doing. Details, cache and job store layout,
-and the retarget method are in [server/README.md](../server/README.md).
+interpreter) and what each GPU is doing. See [server/README.md](../server/README.md);
+the retarget method is documented in `server/workers/retarget.py`.
 
 ### Mock (`tools/mock_orchestrator.py`)
 

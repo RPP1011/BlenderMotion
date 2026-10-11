@@ -1,24 +1,26 @@
 # BlenderMotion
 
-Blender front end for a text → motion → video pipeline: a brief becomes shots,
-shots get generated motion (Kimodo / HY-Motion), which you edit in Blender,
-and then video (H3) is rendered from Blender passes.
+A Blender front end for text → motion → video. A brief becomes shots, and each shot gets
+generated motion from Kimodo. You edit the motion in Blender, and MiniMax H3 then renders
+the video from Blender's passes. Everything runs on your own GPUs.
 
 ![Director workspace](docs/img/director_workspace.png)
+
+**Start with the [tutorial](docs/tutorial.md)**: a clip of each step in the UI, plus real
+H3 results.
 
 | Path | What |
 |---|---|
 | `addon/chimera_director/` | The Blender add-on / extension (4.2 LTS – 5.0) |
-| `server/` | Self-hosted orchestrator: Kimodo, headless Blender (retarget, passes), ComfyUI H3, DWPose eval; see `server/README.md` |
+| `server/` | Self-hosted orchestrator: Kimodo, headless Blender (retarget, passes), ComfyUI H3, DWPose eval ([README](server/README.md)) |
 | `blender_worker/passes.py` | Headless passes worker (kp2d, first/last stills, playblast) |
-| `tools/mock_orchestrator.py` | Stdlib stand-in for the orchestrator API; runs headless Blender workers |
-| `tools/mock_worker.py` | Mock motion and playblast worker |
-| `tools/demo_scene.py` | Builds a demo project (rig, set, 3 shots, targets) |
-| `tests/` | Add-on: `BLENDER=/path/to/blender tests/run_tests.sh [--e2e \| --e2e-server]`; server: `pytest tests/test_server.py`; UI screenshots: `tests/gui_capture.sh` |
-| `docs/architecture.md` | System design |
-| `docs/addon.md` | Add-on usage, orchestrator contract, deviations from the design |
+| `eval/p0`, `eval/p1` | GPU experiments and their findings: motion transfer, speed, multi-camera scenes ([p1 recipe](eval/p1/README.md)) |
+| `tools/` | Mock orchestrator and demo scene for add-on development |
+| `tests/` | `BLENDER=... tests/run_tests.sh [--e2e \| --e2e-server]`, `pytest tests/test_server.py`, `tests/gui_tour.sh` (tutorial clips) |
+| `docs/` | [tutorial](docs/tutorial.md), [architecture](docs/architecture.md), [add-on and contract](docs/addon.md) |
 
-Run the real orchestrator with `python -m server.orchestrator --config server/config.example.json`
-(edit the paths first). With no GPU, `--fake --backend retarget=blender --backend passes=blender
---blender /path/to/blender` drives the add-on with fake models and the real Blender workers.
-The mock in `tools/` still works for add-on development.
+To try the UI without a GPU:
+
+```
+python -m server.orchestrator --fake --backend retarget=blender --backend passes=blender --blender /path/to/blender
+```
